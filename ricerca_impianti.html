@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giustifica — Elenco Causali Fermi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #c8c8c8;
+    font-family: Arial, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #222;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  /* ── WINDOW ── */
+  .window {
+    background: #f0f0f0;
+    border: 1px solid #999;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+    width: 760px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Title bar */
+  .titlebar {
+    background: linear-gradient(to bottom, #e4e4e4, #d0d0d0);
+    border-bottom: 1px solid #b0b0b0;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .titlebar-path { font-size: 11px; color: #555; }
+  .titlebar-path b { color: #333; }
+  .win-controls { display: flex; gap: 2px; }
+  .win-btn {
+    width: 17px; height: 17px;
+    border: 1px solid #888;
+    background: linear-gradient(to bottom, #f5f5f5, #d8d8d8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #444; cursor: pointer; border-radius: 1px;
+  }
+  .win-btn:hover { background: #e0e0e0; }
+  .win-btn.close { font-size: 10px; }
+  .win-btn.close:hover { background: #cc3333; color: #fff; border-color: #aa2222; }
+
+  /* Content */
+  .content {
+    padding: 16px 22px 18px;
+    background: #fff;
+    margin: 6px;
+    border: 1px solid #ccc;
+  }
+
+  .page-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 12px;
+  }
+
+  /* Cerca label */
+  .cerca-label {
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 6px;
+  }
+
+  /* Search area */
+  .search-area {
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 5px;
+    align-items: stretch;
+  }
+
+  .search-input {
+    flex: 1;
+    height: 26px;
+    border: 1px solid #aaa;
+    background: #fff;
+    padding: 0 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #222;
+    outline: none;
+  }
+  .search-input:focus { border-color: #7ab; }
+  .search-input::placeholder { color: #bbb; font-style: italic; }
+  .search-input:disabled { background: #f8f8f8; color: #ccc; }
+
+  .upload-wrap { position: relative; flex-shrink: 0; }
+  .upload-wrap input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-btn {
+    height: 26px;
+    padding: 0 10px;
+    background: linear-gradient(to bottom, #f5f5f5, #ddd);
+    border: 1px solid #aaa;
+    font-size: 12px;
+    font-family: inherit;
+    color: #444;
+    cursor: pointer;
+    white-space: nowrap;
+    display: block;
+    line-height: 24px;
+  }
+  .upload-btn:hover { background: linear-gradient(to bottom, #fff, #e5e5e5); }
+  .upload-btn.loaded { color: #2a7a3a; border-color: #5a9a6a; font-weight: 600; }
+
+  .results-info {
+    font-size: 11px;
+    color: #888;
+    margin-top: 3px;
+    min-height: 16px;
+  }
+
+  /* Dropdown risultati */
+  .results-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: #fff;
+    border: 1px solid #aaa;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 200;
+    box-shadow: 2px 4px 10px rgba(0,0,0,0.18);
+    display: none;
+    margin-top: 1px;
+  }
+  .results-dropdown.open { display: block; }
+  .results-dropdown::-webkit-scrollbar { width: 8px; }
+  .results-dropdown::-webkit-scrollbar-track { background: #f2f2f2; }
+  .results-dropdown::-webkit-scrollbar-thumb { background: #ccc; }
+
+  .result-item {
+    padding: 5px 9px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    color: #333;
+    line-height: 1.5;
+  }
+  .result-item:last-child { border-bottom: none; }
+  .result-item:hover { background: #deeeff; }
+  .result-item.active { background: #c4ddf5; }
+
+  .r-sep { color: #6a9fcf; margin: 0 4px; font-size: 11px; }
+  .r-fermo {
+    margin-left: 8px;
+    font-size: 11px;
+    color: #888;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 0 5px;
+    border-radius: 2px;
+  }
+
+  mark { background: #ffe566; color: inherit; padding: 0; }
+
+  .dd-empty { padding: 8px 10px; font-size: 12px; color: #aaa; text-align: center; }
+
+  /* Separatore */
+  hr { border: none; border-top: 1px solid #ddd; margin: 10px 0 12px; }
+
+  /* Campi form */
+  .form-row {
+    margin-bottom: 8px;
+  }
+  .form-row label {
+    display: block;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 2px;
+  }
+  .form-row label .req { color: #c00; }
+
+  .field-wrap {
+    position: relative;
+  }
+  .field-input {
+    width: 100%;
+    height: 26px;
+    border: 1px solid #bbb;
+    background: #fff;
+    padding: 0 24px 0 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #222;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .field-input::placeholder { color: #ccc; }
+  .field-arrow {
+    position: absolute;
+    right: 6px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 9px;
+    color: #888;
+    pointer-events: none;
+  }
+
+  /* Note */
+  .note-input {
+    width: 100%;
+    border: 1px solid #bbb;
+    background: #fff;
+    padding: 5px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #222;
+    outline: none;
+    resize: vertical;
+    min-height: 65px;
+  }
+  .note-input:focus { border-color: #7ab; }
+
+  /* Work Order row */
+  .wo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  /* Toggle */
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .toggle input { display: none; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: #ccc;
+    border: 1px solid #bbb;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  }
+  .toggle input:checked ~ .toggle-track { background: #6aad7a; border-color: #4d8f5d; }
+  .toggle input:checked ~ .toggle-track::after { left: 20px; }
+
+  .wo-input {
+    flex: 1;
+    border: none;
+    border-bottom: 1px dotted #bbb;
+    background: transparent;
+    font-size: 13px;
+    font-family: inherit;
+    color: #666;
+    padding: 0 4px;
+    outline: none;
+    height: 22px;
+  }
+  .wo-input::placeholder { color: #bbb; }
+
+  /* Footer */
+  .footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #ddd;
+  }
+
+  .btn {
+    height: 26px;
+    padding: 0 18px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0;
+    letter-spacing: 0.01em;
+  }
+  .btn-annulla {
+    background: linear-gradient(to bottom, #f5f5f5, #ddd);
+    border: 1px solid #bbb;
+    color: #444;
+  }
+  .btn-annulla:hover { background: linear-gradient(to bottom, #fff, #e5e5e5); }
+  .btn-salva {
+    background: linear-gradient(to bottom, #7dc46e, #5fa44f);
+    border: 1px solid #4d9040;
+    color: #fff;
+  }
+  .btn-salva:hover { background: linear-gradient(to bottom, #8ed47e, #6fb45f); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #f0f0f0;
+    border: 1px solid #999;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.35);
+    width: 360px;
+  }
+  .modal-titlebar {
+    background: linear-gradient(to bottom, #e4e4e4, #d0d0d0);
+    border-bottom: 1px solid #b0b0b0;
+    padding: 4px 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: #444; user-select: none;
+  }
+  .modal-titlebar b { color: #222; }
+  .modal-x {
+    width: 16px; height: 16px;
+    border: 1px solid #888;
+    background: linear-gradient(to bottom, #f5f5f5, #d8d8d8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; cursor: pointer; border-radius: 1px;
+  }
+  .modal-x:hover { background: #cc3333; color: #fff; border-color: #aa2222; }
+  .modal-body {
+    background: #fff;
+    margin: 5px;
+    border: 1px solid #ccc;
+    padding: 16px 16px 12px;
+  }
+  .modal-question {
+    font-size: 13px; color: #222; margin-bottom: 14px; line-height: 1.5;
+  }
+  .modal-input-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .modal-num {
+    width: 80px; height: 28px;
+    border: 1px solid #aaa; background: #fff;
+    padding: 0 8px; font-size: 15px; font-family: inherit;
+    color: #222; outline: none; text-align: center;
+  }
+  .modal-num:focus { border-color: #7ab; box-shadow: 0 0 0 2px rgba(100,170,190,0.2); }
+  .modal-slash { font-size: 18px; color: #ccc; }
+  .modal-default-val { font-size: 14px; color: #999; font-style: italic; }
+  .modal-hint { font-size: 11px; color: #bbb; margin-top: 8px; }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 6px;
+    padding: 8px 10px 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar">
+    <div class="titlebar-path">LINEA &nbsp;›&nbsp; Elenco Causali Fermi &nbsp;›&nbsp; <b>Giustifica</b></div>
+    <div class="win-controls">
+      <div class="win-btn">—</div>
+      <div class="win-btn">□</div>
+      <div class="win-btn close">✕</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-title">GIUSTIFICA</div>
+    <div class="cerca-label">Cerca fermo impianto:</div>
+
+    <!-- SEARCH -->
+    <div class="search-area">
+      <div class="search-row">
+        <input type="text" id="searchInput" class="search-input"
+               placeholder="Carica prima un file Excel..." disabled autocomplete="off">
+        <div class="upload-wrap">
+          <div class="upload-btn" id="uploadBtn">📂 Carica Excel / CSV</div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        </div>
+      </div>
+      <div class="results-info" id="resultsInfo"></div>
+      <div class="results-dropdown" id="resultsDropdown"></div>
+    </div>
+
+    <hr>
+
+    <!-- Famiglia -->
+    <div class="form-row">
+      <label>Famiglia <span class="req">*</span></label>
+      <div class="field-wrap">
+        <input type="text" class="field-input" id="f-famiglia" placeholder="Famiglia" readonly>
+        <span class="field-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- 1° Livello -->
+    <div class="form-row">
+      <label>1° Livello (Sottogruppo impianto)</label>
+      <div class="field-wrap">
+        <input type="text" class="field-input" id="f-livello1" placeholder="1° Livello (Sottogruppo impianto)" readonly>
+        <span class="field-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- 2° Livello -->
+    <div class="form-row">
+      <label>2° Livello (Anomalia, Problema)</label>
+      <div class="field-wrap">
+        <input type="text" class="field-input" id="f-anomalia" placeholder="2° Livello (Anomalia, Problema)" readonly>
+        <span class="field-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- 3° Livello -->
+    <div class="form-row">
+      <label>3° Livello (Azione di Ripristino)</label>
+      <div class="field-wrap">
+        <input type="text" class="field-input" id="f-azione" placeholder="3° Livello (Azione di Ripristino)" readonly>
+        <span class="field-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- Tipologia di fermo -->
+    <div class="form-row">
+      <label>Tipologia di fermo</label>
+      <div class="field-wrap">
+        <input type="text" class="field-input" id="f-fermo" placeholder="Tipologia di fermo" readonly>
+        <span class="field-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="form-row">
+      <label>Note</label>
+      <textarea class="note-input" id="f-note"></textarea>
+    </div>
+
+    <!-- Work Order EAM -->
+    <div class="wo-row">
+      <label class="toggle">
+        <input type="checkbox" id="toggleWO">
+        <span class="toggle-track"></span>
+      </label>
+      <input type="text" class="wo-input" id="f-wo" placeholder="Work Order EAM">
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button class="btn btn-annulla" onclick="annulla()">ANNULLA</button>
+      <button class="btn btn-salva" onclick="salva()">SALVA</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL minuti fermo -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-titlebar">
+      <b>Durata fermo</b>
+      <div class="modal-x" onclick="closeModal()">✕</div>
+
+<script>
+const COL_MAP = {
+  famiglia:  ['famiglia'],
+  livello1:  ['1° livello','1 livello','primo livello','sottogruppo','1° livello sottogruppo impianto'],
+  anomalia:  ['2° livello','2 livello','secondo livello','anomalia','problema','2° livello anomalia problema'],
+  azione:    ['3° livello','3 livello','terzo livello','azione','ripristino','3° livello azione di ripristino','azione di ripristino'],
+  fermo:     ['tipologia','fermo','tipologia di fermo','tipo fermo']
+};
+
+let allData = [];
+let activeIndex = -1;
+
+function norm(s) { return String(s||'').trim().toLowerCase(); }
+
+function stem(word) {
+  word = word.toLowerCase();
+  const suffixes = [
+    'azioni','azione','amenti','amento','imenti','imento',
+    'ature','atura','iture','itura','zioni','zione',
+    'atori','atore','itori','itore','menti','mento',
+    'enti','ente','anti','ante','isti','ista',
+    'ibili','ibile','abili','abile','ici','ice','uce',
+    'tori','tore','tura','are','ere','ire',
+    'ato','ata','ati','ate','uto','uta','uti','ute','ito','ita','iti','ite',
+    'ndo','nda','oni','one','ani','ana','ini','ina','ale','ali',
+    'osi','osa','ose','oso','ivi','iva','ive','ivo',
+    'si','se','ti','te','ni','ne','ri','re','li','le',
+    'hi','he','ci','ce','gi','ge','vi','ve','mi','me',
+    'pi','pe','bi','be','di','de','fi','fe','zi','ze',
+    'o','a','i','e',
+  ];
+  for (const suf of suffixes) {
+    if (word.endsWith(suf) && word.length - suf.length >= 3)
+      return word.slice(0, word.length - suf.length);
+  }
+  return word;
+}
+
+function tokenize(s) {
+  return norm(s).split(/[\s,;\/\-\.]+/).filter(t => t.length > 1).map(stem);
+}
+
+const SINONIMI = [
+  ['sostituzione','cambio','rimpiazzo','sostituire','cambiare','ricambio'],
+  ['riparazione','ripristino','ripristinare','riparare','revisione'],
+  ['pulizia','pulitura','lavaggio','lavare','pulire','soffiatura'],
+  ['controllo','verifica','verificare','ispezione','ispezionare','check','collaudo'],
+  ['serraggio','stringere','stretto','allentato','allentamento','svitato'],
+  ['taratura','tarare','calibrazione','calibrare','regolazione','regolare','settaggio'],
+  ['lubrificazione','lubrificare','ingrassaggio','ingrassare','oliatura','oliare'],
+  ['smontaggio','smontare','montaggio','montare','rimontaggio'],
+  ['riavvio','riavviare','reset','restart','ripartenza','ripartire'],
+  ['rottura','rotto','spezzato','cedimento','frattura','cricca','danneggiato'],
+  ['accensione','accendere','spegnimento','spegnere','avviamento','avviare'],
+  ['svuotamento','svuotare','drenaggio','drenare','scarico'],
+  ['rabbocco','rabboccare','riempimento','riempire','carico','caricare'],
+  ['perdita','perdite','fuga','fughe','trafilamento','goccia','gocciolamento'],
+  ['blocco','bloccato','fermo','fermato','stallo','inceppamento'],
+  ['usura','usurato','consumato','consumo','deterioramento'],
+  ['vibrazione','vibrazioni','oscillazione'],
+  ['surriscaldamento','temperatura alta','caldo','overtemperature'],
+  ['corrosione','ossidazione','rugine','ruggine','ossidato'],
+  ['intasamento','intasato','ostruzione','ostruito','tapponamento','otturazione'],
+  ['rumore','rumori','cigolio','battito','scricchiolio'],
+  ['pompa','pompe','pump'],
+  ['valvola','valvole','rubinetto','rubinetti'],
+  ['filtro','filtri','filter','setaccio'],
+  ['motore','motori','motor'],
+  ['compressore','compressori','compressor'],
+  ['riduttore','riduttori','gearbox'],
+  ['cuscinetto','cuscinetti','bearing','bronzina'],
+  ['guarnizione','guarnizioni','seal','tenuta','paraolio','O-ring'],
+  ['cinghia','cinghie','belt','catena'],
+  ['sensore','sensori','sonda','trasduttore'],
+  ['tubo','tubi','tubazione','tubazioni','condotto','manichetta','canna','canne','tubovetro','tubo vetro','tubi vetro','tubetti vetro','vetrino','vetrini'],
+  ['raccordo','raccordi','fitting','flangia','flange'],
+  ['serbatoio','serbatoi','vasca','tank'],
+  ['guasto','guasti','avaria','avarie','malfunzionamento','breakdown'],
+  ['manutenzione programmata','manutenzione preventiva','manutenzione ordinaria','MP'],
+  ['fermo macchina','fermo impianto','fuori servizio'],
+];
+
+const SYNS_MAP = new Map();
+for (const gruppo of SINONIMI) {
+  const stems = gruppo.map(w => stem(norm(w)));
+  for (const s of stems) {
+    if (!SYNS_MAP.has(s)) SYNS_MAP.set(s, new Set());
+    for (const s2 of stems) SYNS_MAP.get(s).add(s2);
+  }
+  for (const w of gruppo) {
+    const wn = norm(w);
+    if (!SYNS_MAP.has(wn)) SYNS_MAP.set(wn, new Set());
+    for (const w2 of gruppo) SYNS_MAP.get(wn).add(norm(w2));
+  }
+}
+
+function expandStem(s) { return SYNS_MAP.get(s) || new Set([s]); }
+
+function prepareQuery(q) {
+  return q.split(/\s+/).filter(Boolean).map(t => {
+    const raw = norm(t), st = stem(raw);
+    return { raw, stem: st, syns: expandStem(st), synRaws: expandStem(raw) };
+  });
+}
+
+function matchesAll(text, terms) {
+  const tokens = tokenize(text), raw = norm(text);
+  return terms.every(qt => {
+    if (raw.includes(qt.raw)) return true;
+    for (const sr of qt.synRaws) { if (raw.includes(sr)) return true; }
+    for (const tt of tokens) {
+      for (const qs of qt.syns) { if (tt.startsWith(qs) || qs.startsWith(tt)) return true; }
+    }
+    return false;
+  });
+}
+
+function findCol(headers, keys) {
+  for (const h of headers) {
+    const hn = norm(h);
+    for (const k of keys) { if (hn.includes(k) || k.includes(hn)) return h; }
+  }
+  return null;
+}
+
+// File load
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    let rows = [];
+    if (file.name.endsWith('.csv')) {
+      const lines = evt.target.result.split('\n').filter(l => l.trim());
+      const sep = lines[0].includes(';') ? ';' : ',';
+      const headers = lines[0].split(sep).map(h => h.replace(/"/g,'').trim());
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(sep).map(v => v.replace(/"/g,'').trim());
+        const obj = {}; headers.forEach((h,j) => obj[h] = vals[j]||''); rows.push(obj);
+      }
+    } else {
+      const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    }
+    processData(rows, file.name);
+  };
+  file.name.endsWith('.csv') ? reader.readAsText(file,'UTF-8') : reader.readAsArrayBuffer(file);
+});
+
+function processData(rows, filename) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const cols = {
+    famiglia: findCol(headers, COL_MAP.famiglia),
+    livello1: findCol(headers, COL_MAP.livello1),
+    anomalia: findCol(headers, COL_MAP.anomalia),
+    azione:   findCol(headers, COL_MAP.azione),
+    fermo:    findCol(headers, COL_MAP.fermo),
+  };
+  const mapped = rows.map(row => ({
+    famiglia: String(row[cols.famiglia]||'').trim(),
+    livello1: String(row[cols.livello1]||'').trim(),
+    anomalia: String(row[cols.anomalia]||'').trim(),
+    azione:   String(row[cols.azione]  ||'').trim(),
+    fermo:    String(row[cols.fermo]   ||'').trim(),
+  }));
+  const seen = new Set();
+  allData = mapped.filter(r => {
+    const k = [r.famiglia,r.livello1,r.anomalia,r.azione,r.fermo].join('||');
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  const rimossi = rows.length - allData.length;
+  const btn = document.getElementById('uploadBtn');
+  const fname = filename.length > 22 ? filename.slice(0,20)+'…' : filename;
+  btn.textContent = `✓ ${fname}`;
+  btn.classList.add('loaded');
+  const inp = document.getElementById('searchInput');
+  inp.disabled = false;
+  inp.placeholder = `Cerca tra ${allData.length} record${rimossi ? ` · ${rimossi} duplicati rimossi` : ''}...`;
+  inp.focus();
+}
+
+// Search
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.trim();
+  if (!q) { closeDD(); document.getElementById('resultsInfo').textContent = ''; return; }
+  const terms = prepareQuery(q);
+  const filtered = allData.filter(r =>
+    matchesAll([r.famiglia,r.livello1,r.anomalia,r.azione,r.fermo].join(' '), terms)
+  );
+  document.getElementById('resultsInfo').textContent =
+    filtered.length ? `${filtered.length} risultati` : 'Nessun risultato';
+  renderDD(filtered, terms);
+});
+
+document.getElementById('searchInput').addEventListener('focus', function() {
+  if (this.value.trim()) this.dispatchEvent(new Event('input'));
+});
+
+document.addEventListener('mousedown', function(e) {
+  if (!e.target.closest('.search-area')) closeDD();
+});
+
+function closeDD() {
+  document.getElementById('resultsDropdown').classList.remove('open');
+}
+
+function renderDD(filtered, terms) {
+  const dd = document.getElementById('resultsDropdown');
+  if (!filtered.length) {
+    dd.innerHTML = `<div class="dd-empty">Nessun risultato</div>`;
+    dd.classList.add('open'); return;
+  }
+  dd.innerHTML = filtered.map(r => {
+    const idx = allData.indexOf(r);
+    const segs = [r.famiglia, r.livello1, r.anomalia, r.azione].filter(Boolean);
+    const path = segs.map((s,i) =>
+      `${i ? '<span class="r-sep">›</span>' : ''}${hilite(s, terms)}`
+    ).join('');
+    const fermo = r.fermo ? `<span class="r-fermo">${hilite(r.fermo, terms)}</span>` : '';
+    return `<div class="result-item${activeIndex===idx?' active':''}" onclick="pick(${idx},this)">${path}${fermo}</div>`;
+  }).join('');
+  dd.classList.add('open');
+}
+
+function hilite(text, terms) {
+  let r = escH(text);
+  terms.forEach(t => {
+    if (t.raw) r = r.replace(new RegExp(`(${escRe(t.raw)})`, 'gi'), '<mark>$1</mark>');
+  });
+  return r;
+}
+
+function pick(idx, el) {
+  document.querySelectorAll('.result-item.active').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  activeIndex = idx;
+  const r = allData[idx];
+  ['famiglia','livello1','anomalia','azione','fermo'].forEach(k => {
+    const id = k === 'livello1' ? 'f-livello1' : k === 'anomalia' ? 'f-anomalia' : k === 'azione' ? 'f-azione' : k === 'fermo' ? 'f-fermo' : 'f-famiglia';
+    document.getElementById(id).value = r[k] || '';
+  });
+  const segs = [r.famiglia, r.livello1, r.anomalia, r.azione].filter(Boolean);
+  document.getElementById('searchInput').value = segs.join(' › ');
+  document.getElementById('resultsInfo').textContent = '✓ Selezione applicata';
+  closeDD();
+}
+
+function annulla() {
+  ['f-famiglia','f-livello1','f-anomalia','f-azione','f-fermo','f-note','f-wo'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('searchInput').value = '';
+  document.getElementById('resultsInfo').textContent = '';
+  document.getElementById('toggleWO').checked = false;
+  closeDD(); activeIndex = -1;
+}
+
+let fermoDefaultMin = 25;
+
+function salva() {
+  // Legge i minuti dal campo fermo se contiene un numero
+  const fermoVal = document.getElementById('f-fermo').value || '';
+  const matchMin = fermoVal.match(/\d+/);
+  fermoDefaultMin = matchMin ? parseInt(matchMin[0]) : 25;
+
+  document.getElementById('modalDefaultLabel').textContent = fermoDefaultMin + ' min';
+  document.getElementById('modalMinInput').value = '';
+  document.getElementById('modalMinInput').placeholder = fermoDefaultMin;
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('modalMinInput').focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function confermaMinuti() {
+  const inputVal = document.getElementById('modalMinInput').value.trim();
+  const minuti = inputVal !== '' ? parseInt(inputVal) : fermoDefaultMin;
+  // Qui puoi usare "minuti" per il salvataggio reale
+  console.log('Dati da salvare:', {
+    famiglia: document.getElementById('f-famiglia').value,
+    livello1: document.getElementById('f-livello1').value,
+    anomalia: document.getElementById('f-anomalia').value,
+    azione:   document.getElementById('f-azione').value,
+    fermo:    document.getElementById('f-fermo').value,
+    note:     document.getElementById('f-note').value,
+    wo:       document.getElementById('f-wo').value,
+    minuti:   minuti
+  });
+  alert('Salvato con ' + minuti + ' minuti di fermo.');
+  closeModal();
+}
+
+// Chiudi modal cliccando overlay
+document.addEventListener('DOMContentLoaded', function() {
+  var ov = document.getElementById('modalOverlay');
+  if (ov) ov.addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+});
+
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+</script>
+
+    </div>
+    <div class="modal-body">
+      <div class="modal-question">Indicare i minuti a cui si riferisce il fermo:</div>
+      <div class="modal-input-row">
+        <input type="number" class="modal-num" id="modalMinInput" min="0" placeholder="">
+        <span class="modal-slash">/</span>
+        <span class="modal-default-val" id="modalDefaultLabel">— min</span>
+      </div>
+      <div class="modal-hint">Se lasci vuoto verranno usati i minuti indicati dalla fermata</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-annulla" onclick="closeModal()">ANNULLA</button>
+      <button class="btn btn-salva" onclick="confermaMinuti()">CONFERMA</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
